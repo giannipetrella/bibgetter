@@ -34,11 +34,11 @@ One can add entries to this file in the following ways:
 
 An example of the second option:
 
-`bibgetter fetch 2411.14814 2410.07620 MR1234567`
+`bibgetter add 2411.14814 2410.07620 MR1234567`
 
 An example of the third option:
 
-`bibgetter fetch --file article.aux`
+`bibgetter add --file article.aux`
 
 If an entry is missing, it will make an API call.
 
