@@ -383,7 +383,7 @@ def main():
                 pass
 
     if args.operation[0] not in ["add", "sync", "pull"]:
-        raise (ValueError("Invalid operation"))
+        raise (ValueError("Invalid operation. Only operations are: add, sync, pull."))
         return
 
     # add the keys from the commandline arguments
