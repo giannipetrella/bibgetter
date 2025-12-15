@@ -192,7 +192,7 @@ def bibliography_keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(keys, central) -> bool:
+def add_entries(keys, central) -> int:
     """
     Add entries to the central bibliography.
 
@@ -262,7 +262,7 @@ def add_entries(keys, central) -> bool:
     return len(written)
 
 
-def sync_entries(keys, central, local, filename=None):
+def sync_entries(keys, central, local, filename=None) -> int:
     """
     Synchronize entries from central to local
 
@@ -398,7 +398,7 @@ def main():
 
     if args.operation[0] == "add":
         touched = add_entries(keys, central)
-        if touched:
+        if touched > 0:
             format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
@@ -406,7 +406,7 @@ def main():
 
     if args.operation[0] == "pull":
         touched = add_entries(keys, central)
-        if touched:
+        if touched > 0:
             format(CENTRAL_BIBLIOGRAPHY)
 
         # reread the central bibliography file
