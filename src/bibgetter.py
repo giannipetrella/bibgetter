@@ -66,7 +66,7 @@ def arxiv2biblatex(key, entry):
         f"  year        = {{{entry.updated.year}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
-        f"  ids         = {{{id if key != id else ""}}},\n"
+        f"  ids         = {{{id if key != id else ''}}},\n"
         f"  eprintclass = {{{entry.primary_category}}},\n"
         f"}}\n"
     )
@@ -137,7 +137,7 @@ def clean_mathscinet_entry(entry):
     # if numerical part of key less than 7 characters, add long version as alternative
     key = lines[0].split("MR")[1][:-1]
     if len(key) < 7:
-        long = f"{key.rjust(7, "0")}"
+        long = f"{key.rjust(7, '0')}"
         lines = [lines[0].replace(key, long)] + [f"  IDS = {{MR{key}}},"] + lines[1:]
 
     return "\n".join(lines)
@@ -211,7 +211,7 @@ def add_entries(keys, central) -> int:
         return False
 
     rich.print(
-        f"Looking up {len(missing)} {"entry" if len(missing) == 1 else "entries"}"
+        f"Looking up {len(missing)} {'entry' if len(missing) == 1 else 'entries'}"
     )
 
     written = []
@@ -235,7 +235,7 @@ def add_entries(keys, central) -> int:
 
         rich.print(
             f"Added {len(matched)}"
-            f" {"entry" if len(matched) == 1 else "entries"} from {type}"
+            f" {'entry' if len(matched) == 1 else 'entries'} from {type}"
         )
         rich.print(
             rich.padding.Padding(
@@ -300,7 +300,7 @@ def sync_entries(keys, central, local, filename=None) -> int:
             f.write("\n" + "\n\n".join(entry.raw for entry in entries))
             rich.print(
                 f"[green]Wrote {len(entries)}"
-                f" {"entry" if len(missing) == 1 else "entries"} to local file"
+                f" {'entry' if len(missing) == 1 else 'entries'} to local file"
             )
 
     return len(entries)
