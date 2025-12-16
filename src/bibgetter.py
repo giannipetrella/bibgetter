@@ -33,7 +33,7 @@ def is_arxiv_id(id: str) -> bool:
     old = r"^arXiv:.*$"
     new = r"^\d{4}\.\d{4,5}(v\d+)?$"
 
-    return re.fullmatch(old, id) or re.fullmatch(new, id)
+    return re.fullmatch(old, id) is not None or re.fullmatch(new, id) is not None
 
 
 def is_mathscinet_id(id: str) -> bool:
