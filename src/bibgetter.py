@@ -382,8 +382,8 @@ def main():
                 keys.extend(get_citations(f.read()))
                 pass
 
-    if args.operation[0] not in ["add", "sync", "pull"]:
-        raise (ValueError("Invalid operation. Only operations are: add, sync, pull."))
+    if args.operation[0] not in ["add", "sync", "pull", "format"]:
+        raise (ValueError("Invalid operation. Only operations are: add, sync, pull, format."))
         return
 
     # add the keys from the commandline arguments
@@ -412,6 +412,12 @@ def main():
         # reread the central bibliography file
         central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
         sync_entries(keys, central, local, filename=target)
+
+    if args.operation[0] == "format":
+        if target is None:
+            target = CENTRAL_BIBLIOGRAPHY
+        format(filename=target)
+
 
 
 if __name__ == "__main__":
