@@ -119,8 +119,10 @@ def get_arxiv(ids):
     # get rid of arXiv: prefix if needed
     ids = [id.split(":")[-1] for id in ids]
 
-    entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
-    entries = list(map(arxiv2biblatex, ids, entries))
+    entries = []
+    for id in ids:
+      entry = arxiv.Client().results(arxiv.Search(id_list=list([id])))
+      entries.append(arxiv2biblatex(id, next(entry)))
 
     return "\n".join(entries)
 
