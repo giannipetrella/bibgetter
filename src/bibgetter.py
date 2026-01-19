@@ -210,7 +210,7 @@ def add_entries(keys, central) -> int:
     )
 
     if not missing:
-        return False
+        return 0
 
     rich.print(
         f"Looking up {len(missing)} {'entry' if len(missing) == 1 else 'entries'}"
@@ -224,7 +224,7 @@ def add_entries(keys, central) -> int:
         matched = list(filter(predicate, missing))
         missing = sorted([id for id in missing if id not in matched])
 
-        if not matched:
+        if len(matched) == 0:
             continue
 
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
@@ -275,7 +275,7 @@ def sync_entries(keys, central, local, filename=None) -> int:
     missing = [key for key in keys if key not in bibliography_keys(local)]
 
     rich.print(f"{len(missing)} [default not bold]key(s) not yet in local file")
-    if not len(missing):
+    if len(missing) == 0:
         return 0
 
     entries = []
