@@ -1,5 +1,6 @@
 import pytest
 import re
+import shutil
 from bibgetter import (
     BibgetterConfig,
     bibitems,
@@ -22,6 +23,10 @@ import os
 import time
 import tempfile
 import bibtexparser
+
+requires_biber = pytest.mark.skipif(
+    shutil.which("biber") is None, reason="requires biber"
+)
 
 
 def test_help(capsys):
@@ -949,6 +954,7 @@ def test_add_does_not_refetch_existing_entries(temp_bibgetter_dir, capsys):
 # ---------------------------------------------------------------------------
 
 
+@requires_biber
 def test_format_local_file_deduplicates_identical_entries(
     temp_bibgetter_dir, tmp_path, capsys
 ):
@@ -982,6 +988,7 @@ def test_format_local_file_deduplicates_identical_entries(
     assert content.count("@article{dup,") == 1
 
 
+@requires_biber
 def test_format_local_file_rejects_nonidentical_duplicate_entries(
     temp_bibgetter_dir, tmp_path, capsys
 ):
@@ -1020,6 +1027,7 @@ def test_format_local_file_rejects_nonidentical_duplicate_entries(
 # ---------------------------------------------------------------------------
 
 
+@requires_biber
 def test_format_preserves_year_not_date(temp_bibgetter_dir, capsys):
     """
     After adding an arXiv entry and running the biber formatter, the
@@ -1039,6 +1047,7 @@ def test_format_preserves_year_not_date(temp_bibgetter_dir, capsys):
     ), "biber converted year to date – fix the --output-legacy-dates flag"
 
 
+@requires_biber
 def test_format_preserves_journal_not_journaltitle(temp_bibgetter_dir, capsys):
     """
     After adding a DOI-based journal article and running the biber formatter,

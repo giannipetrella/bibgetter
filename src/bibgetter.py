@@ -604,6 +604,11 @@ def _biber_tool_args(
     ]
 
 
+def _require_tool(tool: str):
+    if shutil.which(tool) is None:
+        raise BibgetterError(f"Required tool not found: {tool}")
+
+
 def _canonicalize_entry(entry_text: str, config: BibgetterConfig) -> str:
     """
     Canonicalise a single bibliography entry using the same biber toolchain as
@@ -695,6 +700,7 @@ def format(filename, config: BibgetterConfig):
     The biber-formatting.conf configuration additionally preserves ``journal``
     (rather than converting to ``journaltitle``) and sorts entries by key.
     """
+    _require_tool("biber")
     _deduplicate_identical_entries(filename, config)
     subprocess.call(
         _biber_tool_args(filename, filename, config),
