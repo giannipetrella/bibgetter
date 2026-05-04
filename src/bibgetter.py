@@ -1,8 +1,10 @@
 import argparse
 import arxiv
 import bibtexparser
+import contextlib
 from dataclasses import dataclass
 import fake_useragent
+import io
 import json
 import glob
 import os
@@ -579,6 +581,91 @@ def write_configuration(config: BibgetterConfig):
             target.write(src.read())
 
 
+def _biber_tool_args(
+    input_filename: str, output_filename: str, config: BibgetterConfig
+) -> list[str]:
+    return [
+        "biber",
+        "--tool",
+        "--output-safechars",
+        "--fixinits",
+        "--isbn-normalise",
+        "--output_encoding=ascii",
+        "--output-align",
+        "--output-legacy-dates",
+        f"--configfile={config.configuration}",
+        "--validate-datamodel",
+        f"--output_file={output_filename}",
+        input_filename,
+    ]
+
+
+def _canonicalize_entry(entry_text: str, config: BibgetterConfig) -> str:
+    """
+    Canonicalise a single bibliography entry using the same biber toolchain as
+    the main formatter.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_filename = os.path.join(tmpdir, "entry.bib")
+        output_filename = os.path.join(tmpdir, "entry.out.bib")
+
+        with open(input_filename, "w") as handle:
+            handle.write(entry_text.strip() + "\n")
+
+        subprocess.run(
+            _biber_tool_args(input_filename, output_filename, config),
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        with open(output_filename) as handle:
+            return handle.read().strip()
+
+
+def _deduplicate_identical_entries(filename: str, config: BibgetterConfig):
+    """
+    Remove duplicate-key entries only when their canonical forms are identical.
+
+    If duplicate keys canonicalise to different bibliography entries, raise an
+    error instead of silently choosing one.
+    """
+    with open(filename) as handle:
+        content = handle.read()
+
+    if not content.strip():
+        return
+
+    with contextlib.redirect_stderr(io.StringIO()):
+        bibliography = bibtexparser.parse_string(content)
+
+    canonical_by_key: dict[str, str] = {}
+    filtered_blocks = []
+    removed_duplicates = False
+
+    for block in bibliography.blocks:
+        if isinstance(block, bibtexparser.model.DuplicateBlockKeyBlock):
+            key = block.key
+            previous = canonical_by_key.setdefault(
+                key, _canonicalize_entry(block.previous_block.raw, config)
+            )
+            duplicate = _canonicalize_entry(block.raw, config)
+            if previous != duplicate:
+                raise ValueError(
+                    f"Duplicate entry key '{key}' canonicalizes to different entries."
+                )
+            removed_duplicates = True
+            continue
+
+        if getattr(block, "raw", None):
+            filtered_blocks.append(block.raw.strip())
+
+    if removed_duplicates:
+        with open(filename, "w") as handle:
+            handle.write("\n\n".join(filtered_blocks).strip() + "\n")
+
+
 def format(filename, config: BibgetterConfig):
     """
     Format the bibliography file using biber.
@@ -598,21 +685,9 @@ def format(filename, config: BibgetterConfig):
     The biber-formatting.conf configuration additionally preserves ``journal``
     (rather than converting to ``journaltitle``) and sorts entries by key.
     """
+    _deduplicate_identical_entries(filename, config)
     subprocess.call(
-        [
-            "biber",
-            "--tool",
-            "--output-safechars",
-            "--fixinits",
-            "--isbn-normalise",
-            "--output_encoding=ascii",
-            "--output-align",
-            "--output-legacy-dates",
-            f"--configfile={config.configuration}",
-            "--validate-datamodel",
-            f"--output_file={filename}",
-            filename,
-        ],
+        _biber_tool_args(filename, filename, config),
         stdout=subprocess.DEVNULL,
     )
 
@@ -957,6 +1032,11 @@ def main(fake_args=None):
     # On first run (and all subsequent runs) of bibgetter, write configuration.
     write_configuration(config)
 
+    if args.operation[0] == "format":
+        target = args.local if args.local else config.bibliography
+        format(filename=target, config=config)
+        return
+
     # Read the central bibliography file.
     central = None
     try:
@@ -1030,11 +1110,6 @@ def main(fake_args=None):
         # Reread the central bibliography file.
         central = bibtexparser.parse_file(config.bibliography)
         sync_entries(keys, central, local, filename=target)
-
-    if args.operation[0] == "format":
-        if target is None:
-            target = config.bibliography
-        format(filename=target, config=config)
 
 
 if __name__ == "__main__":

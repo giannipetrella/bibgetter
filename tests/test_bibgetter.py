@@ -945,6 +945,77 @@ def test_add_does_not_refetch_existing_entries(temp_bibgetter_dir, capsys):
 
 
 # ---------------------------------------------------------------------------
+# format – duplicate keys should not trigger bibtexparser warnings
+# ---------------------------------------------------------------------------
+
+
+def test_format_local_file_deduplicates_identical_entries(
+    temp_bibgetter_dir, tmp_path, capsys
+):
+    """The format CLI should collapse duplicate keys after canonicalization."""
+    local_bib = tmp_path / "duplicates.bib"
+    local_bib.write_text(
+        "@article{dup,\n"
+        "  title = {One},\n"
+        "  year = {2020},\n"
+        "}\n\n"
+        "@article{dup,\n"
+        "  year = {2020},\n"
+        '  title = "One",\n'
+        "}\n"
+    )
+
+    main(
+        [
+            "format",
+            "--local",
+            str(local_bib),
+            "--data-directory",
+            temp_bibgetter_dir,
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert "Unknown block type" not in captured.out
+    assert "Unknown block type" not in captured.err
+    content = local_bib.read_text()
+    assert content.count("@article{dup,") == 1
+
+
+def test_format_local_file_rejects_nonidentical_duplicate_entries(
+    temp_bibgetter_dir, tmp_path
+):
+    """The format CLI should fail if duplicate-key entries differ semantically."""
+    local_bib = tmp_path / "duplicates.bib"
+    local_bib.write_text(
+        "@article{dup,\n"
+        "  title = {One},\n"
+        "  year = {2020},\n"
+        "}\n\n"
+        "@article{dup,\n"
+        "  title = {One},\n"
+        "  year = {2021},\n"
+        "}\n"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Duplicate entry key 'dup' canonicalizes to different entries.",
+    ):
+        main(
+            [
+                "format",
+                "--local",
+                str(local_bib),
+                "--data-directory",
+                temp_bibgetter_dir,
+            ]
+        )
+
+    assert local_bib.read_text().count("@article{dup,") == 2
+
+
+# ---------------------------------------------------------------------------
 # biber formatting – year field must not be converted to date (pbelmans issue)
 # ---------------------------------------------------------------------------
 
