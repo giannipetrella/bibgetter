@@ -983,7 +983,7 @@ def test_format_local_file_deduplicates_identical_entries(
 
 
 def test_format_local_file_rejects_nonidentical_duplicate_entries(
-    temp_bibgetter_dir, tmp_path
+    temp_bibgetter_dir, tmp_path, capsys
 ):
     """The format CLI should fail if duplicate-key entries differ semantically."""
     local_bib = tmp_path / "duplicates.bib"
@@ -998,20 +998,20 @@ def test_format_local_file_rejects_nonidentical_duplicate_entries(
         "}\n"
     )
 
-    with pytest.raises(
-        ValueError,
-        match="Duplicate entry key 'dup' canonicalizes to different entries.",
-    ):
-        main(
-            [
-                "format",
-                "--local",
-                str(local_bib),
-                "--data-directory",
-                temp_bibgetter_dir,
-            ]
-        )
+    main(
+        [
+            "format",
+            "--local",
+            str(local_bib),
+            "--data-directory",
+            temp_bibgetter_dir,
+        ]
+    )
 
+    captured = capsys.readouterr()
+    assert (
+        "Duplicate entry key 'dup' canonicalizes to different entries." in captured.out
+    )
     assert local_bib.read_text().count("@article{dup,") == 2
 
 

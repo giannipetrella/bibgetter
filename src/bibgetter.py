@@ -57,6 +57,10 @@ class BibgetterConfig:
         return cls(directory=directory)
 
 
+class BibgetterError(Exception):
+    """User-facing CLI error."""
+
+
 def is_arxiv_id(id: str) -> bool:
     """
     Check if the given string is a valid arXiv identifier.
@@ -304,7 +308,7 @@ def get_mathscinet(ids):
 
     # anything but 200 means something went wrong
     if not r.status_code == 200:
-        print(f"URL was {r.url}")
+        rich.print(f"[red]MathSciNet request URL: [bold]{r.url}")
         raise Exception("Received HTTP status code " + str(r.status_code))
 
     response = json.loads(r.text)
@@ -497,7 +501,7 @@ def add_entries(keys, central, config: BibgetterConfig) -> int:
             except Exception as e:
                 action_failed = True
                 rich.print(f"[red]Error in retrieving {type} entries")
-                rich.print(e)
+                rich.print(f"[red]{e}")
 
         if not action_failed:
             rich.print(
@@ -612,13 +616,19 @@ def _canonicalize_entry(entry_text: str, config: BibgetterConfig) -> str:
         with open(input_filename, "w") as handle:
             handle.write(entry_text.strip() + "\n")
 
-        subprocess.run(
-            _biber_tool_args(input_filename, output_filename, config),
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        try:
+            subprocess.run(
+                _biber_tool_args(input_filename, output_filename, config),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            message = (
+                e.stderr.strip() if e.stderr else "biber failed to canonicalize entry."
+            )
+            raise BibgetterError(message) from e
 
         with open(output_filename) as handle:
             return handle.read().strip()
@@ -652,7 +662,7 @@ def _deduplicate_identical_entries(filename: str, config: BibgetterConfig):
             )
             duplicate = _canonicalize_entry(block.raw, config)
             if previous != duplicate:
-                raise ValueError(
+                raise BibgetterError(
                     f"Duplicate entry key '{key}' canonicalizes to different entries."
                 )
             removed_duplicates = True
@@ -1032,84 +1042,87 @@ def main(fake_args=None):
     # On first run (and all subsequent runs) of bibgetter, write configuration.
     write_configuration(config)
 
-    if args.operation[0] == "format":
-        target = args.local if args.local else config.bibliography
-        format(filename=target, config=config)
-        return
-
-    # Read the central bibliography file.
-    central = None
     try:
-        central = bibtexparser.parse_file(config.bibliography)
-    except FileNotFoundError:
-        pass
+        if args.operation[0] == "format":
+            target = args.local if args.local else config.bibliography
+            format(filename=target, config=config)
+            return
 
-    if args.operation[0] == "alias":
-        handle_aliases(central, args.operation[1:], config)
-        return
-
-    if args.operation[0] == "bibitems":
-        bib_file = args.operation[1] if len(args.operation) > 1 else None
-        bibitems(bib_file, config)
-        return
-
-    # Read the local bibliography file (if specified).
-    local = None
-    if args.local:
+        # Read the central bibliography file.
+        central = None
         try:
-            local = bibtexparser.parse_file(args.local)
+            central = bibtexparser.parse_file(config.bibliography)
         except FileNotFoundError:
             pass
 
-    # Collect keys: from command-line arguments and from .aux file(s).
-    keys = []
+        if args.operation[0] == "alias":
+            handle_aliases(central, args.operation[1:], config)
+            return
 
-    if args.file:
-        for pattern in args.file:
-            for filename in glob.glob(pattern):
-                with open(filename, encoding="utf-8", errors="replace") as fh:
-                    keys.extend(
-                        get_citations(fh.read(), base_dir=os.path.dirname(filename))
-                    )
+        if args.operation[0] == "bibitems":
+            bib_file = args.operation[1] if len(args.operation) > 1 else None
+            bibitems(bib_file, config)
+            return
 
-    if args.operation[0] not in ["add", "sync", "pull", "get", "format"]:
-        raise ValueError(
-            "Invalid operation. Only operations are: add, sync, pull, get, format."
-        )
+        # Read the local bibliography file (if specified).
+        local = None
+        if args.local:
+            try:
+                local = bibtexparser.parse_file(args.local)
+            except FileNotFoundError:
+                pass
 
-    # Add the keys from the command-line arguments.
-    keys.extend(args.operation[1:])
-    keys = list(set(keys))
+        # Collect keys: from command-line arguments and from .aux file(s).
+        keys = []
 
-    # Only print "Considering" message for operations that actually use keys.
-    if args.operation[0] != "format":
-        rich.print(f"Considering {len(keys)} [default not bold]key(s)")
+        if args.file:
+            for pattern in args.file:
+                for filename in glob.glob(pattern):
+                    with open(filename, encoding="utf-8", errors="replace") as fh:
+                        keys.extend(
+                            get_citations(fh.read(), base_dir=os.path.dirname(filename))
+                        )
 
-    target = None
-    if hasattr(args, "local"):
-        target = args.local
+        if args.operation[0] not in ["add", "sync", "pull", "get", "format"]:
+            raise BibgetterError(
+                "Invalid operation. Only operations are: add, sync, pull, get, format."
+            )
 
-    if args.operation[0] == "get":
-        # TODO: support local bibliography file here
-        get_entries(keys, central, config)
-        return
+        # Add the keys from the command-line arguments.
+        keys.extend(args.operation[1:])
+        keys = list(set(keys))
 
-    if args.operation[0] == "add":
-        touched = add_entries(keys, central, config)
-        if touched > 0:
-            format(config.bibliography, config)
+        # Only print "Considering" message for operations that actually use keys.
+        if args.operation[0] != "format":
+            rich.print(f"Considering {len(keys)} [default not bold]key(s)")
 
-    if args.operation[0] == "sync":
-        sync_entries(keys, central, local, filename=target)
+        target = None
+        if hasattr(args, "local"):
+            target = args.local
 
-    if args.operation[0] == "pull":
-        touched = add_entries(keys, central, config)
-        if touched > 0:
-            format(config.bibliography, config)
+        if args.operation[0] == "get":
+            # TODO: support local bibliography file here
+            get_entries(keys, central, config)
+            return
 
-        # Reread the central bibliography file.
-        central = bibtexparser.parse_file(config.bibliography)
-        sync_entries(keys, central, local, filename=target)
+        if args.operation[0] == "add":
+            touched = add_entries(keys, central, config)
+            if touched > 0:
+                format(config.bibliography, config)
+
+        if args.operation[0] == "sync":
+            sync_entries(keys, central, local, filename=target)
+
+        if args.operation[0] == "pull":
+            touched = add_entries(keys, central, config)
+            if touched > 0:
+                format(config.bibliography, config)
+
+            # Reread the central bibliography file.
+            central = bibtexparser.parse_file(config.bibliography)
+            sync_entries(keys, central, local, filename=target)
+    except BibgetterError as e:
+        rich.print(f"[red]{e}")
 
 
 if __name__ == "__main__":
